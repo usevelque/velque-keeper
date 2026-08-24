@@ -27,3 +27,15 @@ function qtyFor(usd, price, lot, baseDec) {
   return (q / lot) * lot;
 }
 
+/** Account balance; null if it could not be read (then no top-up is made). */
+async function balance(conn, acc) {
+  try { return BigInt((await conn.getTokenAccountBalance(acc)).value.amount); } catch { return null; }
+}
+
+const mintToIx = (prog, mint, dest, authority, amount) => {
+  const d = Buffer.alloc(9); d[0] = 7; d.writeBigUInt64LE(amount, 1);
+  return new TransactionInstruction({ programId: prog, keys: [
+    { pubkey: mint, isSigner: false, isWritable: true }, { pubkey: dest, isSigner: false, isWritable: true },
+    { pubkey: authority, isSigner: true, isWritable: false }], data: d });
+};
+
