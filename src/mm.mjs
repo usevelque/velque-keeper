@@ -39,3 +39,20 @@ const mintToIx = (prog, mint, dest, authority, amount) => {
     { pubkey: authority, isSigner: true, isWritable: false }], data: d });
 };
 
+async function sendBatches(conn, payer, ixs, per = 3) {
+  const sigs = [];
+  for (let i = 0; i < ixs.length; i += per) {
+    const tx = new Transaction().add(
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 900_000 }),
+      ...ixs.slice(i, i + per),
+    );
+    tx.feePayer = payer.publicKey;
+    const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
+    tx.recentBlockhash = blockhash;
+    tx.sign(payer);
+    const sig = await conn.sendRawTransaction(tx.serialize());
+    sigs.push(conn.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed').then((r) => (r.value.err ? `err ${JSON.stringify(r.value.err)}` : 'ok')).catch((e) => `err ${String(e.message).slice(0, 60)}`));
+  }
+  return Promise.all(sigs);
+}
+
