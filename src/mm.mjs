@@ -56,3 +56,30 @@ async function sendBatches(conn, payer, ixs, per = 3) {
   return Promise.all(sigs);
 }
 
+/**
+ * One market maker pass over a market. oracle is needed to top up the market
+ * maker with test tokens (it mints them on devnet).
+ */
+export async function makeMarket({ conn, m, mk, mm, oracle, quoteMint, quoteProg, now }) {
+  const report = { did: [] };
+  const R = mk.reference;
+  if (!R || R === 0n) return report;
+  const baseAcc = V.ata(mm.publicKey, m.baseMintKey, m.baseProgKey);
+  const quoteAcc = V.ata(mm.publicKey, quoteMint, quoteProg);
+  const BU = 10n ** BigInt(m.baseDecimals);
+
+  // top up test tokens if the market maker has run low
+  const [bb, qb] = await Promise.all([balance(conn, baseAcc), balance(conn, quoteAcc)]);
+  const top = [];
+  if (bb !== null && bb < 300n * BU) top.push(mintToIx(m.baseProgKey, m.baseMintKey, baseAcc, oracle.publicKey, 1_000n * BU));
+  if (qb !== null && qb < 300_000n * U) top.push(mintToIx(quoteProg, quoteMint, quoteAcc, oracle.publicKey, 1_000_000n * U));
+  if (top.length) { await sendBatches(conn, oracle, top, 2); report.did.push('topup'); }
+
+  const ixs = [];
+  const sess = V.session(mk, now);
+  const tick = mk.tick;
+  const lot = mk.lot;
+
+  if (ixs.length) report.tx = await sendBatches(conn, mm, ixs, 3);
+  return report;
+}
