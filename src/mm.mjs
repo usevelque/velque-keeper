@@ -107,6 +107,18 @@ export async function makeMarket({ conn, m, mk, mm, oracle, quoteMint, quoteProg
       if (!used.has(i) && t.qty > 0n) ixs.push(V.placeDayIx({ owner: mm.publicKey, mk, side: t.side, price: t.price, qty: t.qty, baseAcc, quoteAcc }));
     });
     if (ixs.length) report.did.push(`day ${ixs.length} ix`);
+  } else {
+    // Dark: GTC orders in the current window, if not placed yet
+    if (now < mk.windowEnd - 8) {
+      const book = await V.readBook(conn, V.bookPda(m.marketKey, mk.auctionId));
+      const live = book ? book.orders.filter((o) => o.owner.equals(mm.publicKey) && o.status === 'live') : [];
+      const hasBid = live.some((o) => o.side === 'buy');
+      const hasAsk = live.some((o) => o.side === 'sell');
+      const bid = floorTick((R * (10_000n - NIGHT.bps)) / 10_000n, tick);
+      const ask = ceilTick((R * (10_000n + NIGHT.bps)) / 10_000n, tick);
+      if (!hasBid) ixs.push(V.placeIx({ owner: mm.publicKey, mk, side: V.BUY, price: bid, qty: qtyFor(NIGHT.usd, bid, lot, m.baseDecimals), src: quoteAcc, tif: V.TIF_GTC }));
+      if (!hasAsk) ixs.push(V.placeIx({ owner: mm.publicKey, mk, side: V.SELL, price: ask, qty: qtyFor(NIGHT.usd, ask, lot, m.baseDecimals), src: baseAcc, tif: V.TIF_GTC }));
+    }
   }
   if (ixs.length) report.tx = await sendBatches(conn, mm, ixs, 3);
   return report;
