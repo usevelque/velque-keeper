@@ -119,6 +119,22 @@ export async function makeMarket({ conn, m, mk, mm, oracle, quoteMint, quoteProg
       if (!hasBid) ixs.push(V.placeIx({ owner: mm.publicKey, mk, side: V.BUY, price: bid, qty: qtyFor(NIGHT.usd, bid, lot, m.baseDecimals), src: quoteAcc, tif: V.TIF_GTC }));
       if (!hasAsk) ixs.push(V.placeIx({ owner: mm.publicKey, mk, side: V.SELL, price: ask, qty: qtyFor(NIGHT.usd, ask, lot, m.baseDecimals), src: baseAcc, tif: V.TIF_GTC }));
     }
+    // claim fills and refunds in the most recent cleared windows
+    const ids = [];
+    for (let i = 1n; i <= 3n && mk.auctionId - i >= 0n; i++) ids.push(mk.auctionId - i);
+    const keys = ids.map((id) => V.bookPda(m.marketKey, id));
+    const infos = await conn.getMultipleAccountsInfo(keys);
+    for (let i = 0; i < keys.length; i++) {
+      if (!infos[i]) continue;
+      const b = await V.readBook({ getAccountInfo: async () => infos[i] }, keys[i]);
+      if (!b?.cleared) continue;
+      for (const o of b.orders) {
+        if (o.owner.equals(mm.publicKey) && o.status === 'live' && (o.filled > 0n || o.escrow > 0n)) {
+          ixs.push(V.claimIx({ owner: mm.publicKey, mk, book: keys[i], index: o.index, baseDest: baseAcc, quoteDest: quoteAcc }));
+        }
+      }
+    }
+    if (ixs.length) report.did.push(`night ${ixs.length} ix`);
   }
   if (ixs.length) report.tx = await sendBatches(conn, mm, ixs, 3);
   return report;
