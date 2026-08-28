@@ -80,6 +80,34 @@ export async function makeMarket({ conn, m, mk, mm, oracle, quoteMint, quoteProg
   const tick = mk.tick;
   const lot = mk.lot;
 
+  if (sess === 'day') {
+    const day = await V.readDay(conn, m.marketKey);
+    const mine = day.slots.filter((s) => s.owner.equals(mm.publicKey));
+    const targets = DAY_LEVELS.flatMap((l) => {
+      const bid = floorTick((R * (10_000n - l.bps)) / 10_000n, tick);
+      const ask = ceilTick((R * (10_000n + l.bps)) / 10_000n, tick);
+      return [
+        { side: V.BUY, sideName: 'buy', price: bid, qty: qtyFor(l.usd, bid, lot, m.baseDecimals) },
+        { side: V.SELL, sideName: 'sell', price: ask, qty: qtyFor(l.usd, ask, lot, m.baseDecimals) },
+      ];
+    });
+    const tol = (R * REQUOTE_BPS) / 10_000n;
+    const used = new Set();
+    for (const s of mine) {
+      if (s.status === 'moved' || (s.qty === 0n && s.status === 'live')) { ixs.push(V.claimDayIx({ owner: mm.publicKey, mk, index: s.index, baseAcc, quoteAcc })); continue; }
+      const t = targets.findIndex((x, i) => !used.has(i) && x.sideName === s.side && (s.price > x.price ? s.price - x.price : x.price - s.price) <= tol);
+      if (t >= 0) {
+        used.add(t);
+        if (s.owed > 0n) ixs.push(V.claimDayIx({ owner: mm.publicKey, mk, index: s.index, baseAcc, quoteAcc }));
+      } else {
+        ixs.push(V.cancelDayIx({ owner: mm.publicKey, mk, index: s.index, baseAcc, quoteAcc }));
+      }
+    }
+    targets.forEach((t, i) => {
+      if (!used.has(i) && t.qty > 0n) ixs.push(V.placeDayIx({ owner: mm.publicKey, mk, side: t.side, price: t.price, qty: t.qty, baseAcc, quoteAcc }));
+    });
+    if (ixs.length) report.did.push(`day ${ixs.length} ix`);
+  }
   if (ixs.length) report.tx = await sendBatches(conn, mm, ixs, 3);
   return report;
 }
