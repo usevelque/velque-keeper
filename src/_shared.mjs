@@ -22,6 +22,18 @@ export const markets = (cfg.markets || [{
 export const market = markets[0].marketKey;
 export const baseMint = markets[0].baseMintKey;
 
+const keyFrom = (name) => {
+  const raw = process.env[name];
+  if (!raw) return null;
+  return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(raw)));
+};
+export function signer() {
+  const k = keyFrom('VELQUE_KEY');
+  if (!k) throw new Error('VELQUE_KEY is not set');
+  return k;
+}
+export const mmSigner = () => keyFrom('VELQUE_MM_KEY');
+
 export function json(res, code, body) {
   res.statusCode = code;
   res.setHeader('content-type', 'application/json');
