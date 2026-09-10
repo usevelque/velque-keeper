@@ -22,3 +22,26 @@ async function reference(m, mk, now) {
   return nasdaqReference({ symbol: m.symbol, tick: mk.tick, multiplier, jupiterMint: m.checkMint, nowSec: now });
 }
 
+// Books with no trades, holding only carried-over or cancelled orders, add
+// nothing to the log: close them, and the rent goes back to whoever paid it.
+// Books with trades stay on chain as the auction log.
+async function closeIdleBooks(me, m, uptoId) {
+  const ids = [];
+  for (let i = 0n; i <= 14n && uptoId - i >= 0n; i++) ids.push(uptoId - i);
+  const keys = ids.map((id) => V.bookPda(m.marketKey, id));
+  const infos = await conn.getMultipleAccountsInfo(keys);
+  const ixs = [];
+  for (let i = 0; i < keys.length; i++) {
+    if (!infos[i]) continue;
+    const b = await V.readBook({ getAccountInfo: async () => infos[i] }, keys[i]);
+    if (b && b.volume === 0n && V.isSettled(b)) ixs.push(V.closeBookIx({ book: keys[i], payer: b.payer }));
+  }
+  if (!ixs.length) return 0;
+  try {
+    await sendAndConfirmTransaction(conn, new Transaction().add(...ixs.slice(0, 8)), [me], { commitment: 'confirmed' });
+    return Math.min(ixs.length, 8);
+  } catch {
+    return 0;
+  }
+}
+
