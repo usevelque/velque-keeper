@@ -45,3 +45,9 @@ async function closeIdleBooks(me, m, uptoId) {
   }
 }
 
+const budget = () => [ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 })];
+const send = (me, ixs) => sendAndConfirmTransaction(conn, new Transaction().add(...budget(), ...ixs), [me], { commitment: 'confirmed' });
+// race with another call: the window is already cleared or open, or there is nothing to move
+const RACE = ['custom program error: 0x5', 'custom program error: 0x8', 'custom program error: 0xf', 'custom program error: 0x4'];
+const isRace = (e) => RACE.some((c) => String(e.message || e).includes(c));
+
