@@ -51,3 +51,51 @@ const send = (me, ixs) => sendAndConfirmTransaction(conn, new Transaction().add(
 const RACE = ['custom program error: 0x5', 'custom program error: 0x8', 'custom program error: 0xf', 'custom program error: 0x4'];
 const isRace = (e) => RACE.some((c) => String(e.message || e).includes(c));
 
+async function runMarket(m, me, now, open) {
+  let mk = await V.readMarket(conn, m.marketKey);
+  const done = [];
+  let cleared = null;
+  let oracle;
+  const book = await V.readBook(conn, V.bookPda(m.marketKey, mk.auctionId));
+  const hasOrders = !!book && book.orders.some((o) => o.status === 'live');
+
+  if (open) {
+    const ixs = [];
+    const stale = now - mk.refAt > 60;
+    const ref = stale ? await reference(m, mk, now) : null;
+    if (ref?.price && me.publicKey.equals(mk.authority)) {
+      ixs.push(V.setReferenceIx({ authority: me.publicKey, market: m.marketKey, price: ref.price }));
+      done.push('reference');
+      oracle = { share: ref.share, multiplier: ref.multiplier, sources: ref.sources };
+    } else if (ref) oracle = { skipped: ref.reason };
+    const dayAfter = ixs.length > 0 || V.session(mk, now) === 'day';
+    // in Day a window with orders is cleared right away (the cross); there is no point waiting on an empty one
+    if (hasOrders && (dayAfter || now >= mk.windowEnd)) { ixs.push(V.clearIx({ cranker: me.publicKey, mk })); done.push(dayAfter ? 'cross' : 'clear'); cleared = mk.auctionId; }
+    if (ixs.length) {
+      try { await send(me, ixs); } catch (e) { if (!isRace(e)) throw e; done.push('race'); }
+    }
+  } else {
+    if (now >= mk.windowEnd) {
+      try { await send(me, [V.clearIx({ cranker: me.publicKey, mk })]); done.push('clear'); cleared = mk.auctionId; } catch (e) { if (!isRace(e)) throw e; done.push('race'); }
+      mk = await V.readMarket(conn, m.marketKey);
+    }
+    if (V.session(mk, now) === 'dark') {
+      const day = await V.readDay(conn, m.marketKey);
+      if (day.bids.length + day.asks.length > 0) {
+        try { await send(me, [V.closeDayIx({ cranker: me.publicKey, mk })]); done.push('close_day'); } catch (e) { if (!isRace(e)) throw e; }
+      }
+    }
+  }
+
+  const out = { symbol: m.symbol, done, oracle };
+  if (cleared !== null) {
+    const b = await V.readBook(conn, V.bookPda(m.marketKey, cleared));
+    Object.assign(out, { auctionId: Number(cleared), clearPrice: b ? Number(b.clearPrice) / 1e6 : null, volume: b ? Number(b.volume) / 10 ** m.baseDecimals : 0 });
+  }
+  out.mk = await V.readMarket(conn, m.marketKey);
+  // idle books are swept on every call: if a close failed once (RPC limit),
+  // the rent must not stay locked
+  if (out.mk.auctionId > 0n) out.closed = await closeIdleBooks(me, m, out.mk.auctionId - 1n);
+  return out;
+}
+
