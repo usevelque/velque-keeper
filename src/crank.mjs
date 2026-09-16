@@ -99,3 +99,44 @@ async function runMarket(m, me, now, open) {
   return out;
 }
 
+export default async function handler(req, res) {
+  try {
+    const me = signer();
+    const url = new URL(req.url, 'http://local');
+    const onlyM = url.searchParams.get('m');
+    const cron = !!process.env.CRON_SECRET && url.searchParams.get('key') === process.env.CRON_SECRET;
+    const mm = cron ? mmSigner() : null;
+    const now = await chainNow();
+    const open = V.nasdaqOpen(now);
+    // the oracle pays book rent and fees: without SOL the market stalls, and that must show in the logs
+    const sol = await conn.getBalance(me.publicKey).catch(() => null);
+    if (sol !== null && sol < 60_000_000) console.error(`ORACLE LOW ON SOL: ${sol / 1e9} (${me.publicKey.toBase58()})`);
+    // the market order rotates every minute: the last one in the queue hits the
+    // public RPC limit more often, and it should not always be the same market
+    const shift = Math.floor(now / 60) % markets.length;
+    const rotated = markets.slice(shift).concat(markets.slice(0, shift));
+    const list = onlyM ? markets.filter((m) => m.symbol === onlyM) : rotated;
+
+    // markets run one at a time: the public devnet RPC throttles parallel requests
+    const one = async (m) => {
+      try {
+        const r = await runMarket(m, me, now, open);
+        if (mm) {
+          try { r.mm = await makeMarket({ conn, m, mk: r.mk, mm, oracle: me, quoteMint, quoteProg, now: await chainNow() }); } catch (e) { r.mm = { error: String(e.message || e).slice(0, 160) }; }
+        }
+        r.session = V.session(r.mk, await chainNow());
+        delete r.mk;
+        return r;
+      } catch (e) {
+        return { symbol: m.symbol, error: String(e.message || e).slice(0, 200) };
+      }
+    };
+    const work = (async () => { const out = []; for (const m of list) out.push(await one(m)); return out; })();
+    const results = await work;
+    // backward compatibility: the first market's fields at the top level
+    const first = results.find((r) => r.symbol === markets[0].symbol) || results[0] || {};
+    return json(res, 200, { nasdaq: open ? 'open' : 'closed', session: first.session, done: first.done, oracle: first.oracle, cron, oracleSol: sol === null ? null : sol / 1e9, markets: results });
+  } catch (e) {
+    return json(res, 500, { error: String(e.message || e).slice(0, 300) });
+  }
+}
