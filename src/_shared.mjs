@@ -34,6 +34,21 @@ export function signer() {
 }
 export const mmSigner = () => keyFrom('VELQUE_MM_KEY');
 
+// Chain time. The block for the newest slot may not be available yet ("Block not
+// available"): then use a slightly earlier slot, and as a last resort the server clock.
+export async function chainNow() {
+  try {
+    const slot = await conn.getSlot('confirmed');
+    for (const back of [0, 4, 12]) {
+      try {
+        const t = await conn.getBlockTime(slot - back);
+        if (t) return t + Math.round(back * 0.4);
+      } catch { /* try an earlier slot */ }
+    }
+  } catch { /* RPC unavailable */ }
+  return Math.floor(Date.now() / 1000);
+}
+
 export function json(res, code, body) {
   res.statusCode = code;
   res.setHeader('content-type', 'application/json');
