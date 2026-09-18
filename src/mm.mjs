@@ -15,7 +15,7 @@ import * as V from 'velque-sdk/client';
 
 const DAY_LEVELS = [{ bps: 20n, usd: 2_500n }, { bps: 60n, usd: 6_000n }];
 const NIGHT = { bps: 100n, usd: 4_000n };
-const REQUOTE_BPS = 20n;
+const REQUOTE_BPS = 10n;
 const U = 1_000_000n;
 
 const floorTick = (p, t) => (p / t) * t;
