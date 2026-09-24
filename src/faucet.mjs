@@ -35,3 +35,34 @@ async function readBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return json(res, 405, { error: 'POST only' });
+  let wallet;
+  try {
+    wallet = new PublicKey((await readBody(req)).wallet);
+  } catch {
+    return json(res, 400, { error: 'bad wallet' });
+  }
+  try {
+    const me = signer();
+    const qAta = ata(wallet, quoteMint, quoteProg);
+    if (await conn.getAccountInfo(qAta)) {
+      return json(res, 429, { error: 'This wallet already has test tokens.' });
+    }
+    const tx = new Transaction().add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }));
+    for (const m of markets) {
+      tx.add(createAtaIx(me.publicKey, wallet, m.baseMintKey, m.baseProgKey),
+        mintToIx(m.baseMintKey, m.baseProgKey, ata(wallet, m.baseMintKey, m.baseProgKey), me.publicKey, BASE_DROP * 10n ** BigInt(m.baseDecimals)));
+    }
+    tx.add(createAtaIx(me.publicKey, wallet, quoteMint, quoteProg), mintToIx(quoteMint, quoteProg, qAta, me.publicKey, QUOTE_DROP));
+    let sol = 0;
+    if ((await conn.getBalance(wallet)) < SOL_FLOOR) {
+      tx.add(SystemProgram.transfer({ fromPubkey: me.publicKey, toPubkey: wallet, lamports: SOL_DROP }));
+      sol = SOL_DROP / 1e9;
+    }
+    const sig = await sendAndConfirmTransaction(conn, tx, [me], { commitment: 'confirmed' });
+    return json(res, 200, { ok: true, sig, base: Number(BASE_DROP), bases: markets.map((m) => m.baseSymbol), quote: Number(QUOTE_DROP / U), sol });
+  } catch (e) {
+    return json(res, 500, { error: String(e.message || e).slice(0, 300) });
+  }
+}
