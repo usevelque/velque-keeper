@@ -15,6 +15,7 @@ import { conn, signer, mmSigner, markets, quoteMint, quoteProg, chainNow, json }
 import * as V from 'velque-sdk/client';
 import { nasdaqReference } from 'velque-sdk/reference';
 import { makeMarket } from './mm.mjs';
+import { waitUntil } from '@vercel/functions';
 
 async function reference(m, mk, now) {
   const mint = await conn.getAccountInfo(m.baseMintKey);
@@ -132,6 +133,11 @@ export default async function handler(req, res) {
       }
     };
     const work = (async () => { const out = []; for (const m of list) out.push(await one(m)); return out; })();
+    // cron waits at most 30 s for a response: reply at once, the work continues in the background
+    if (cron) {
+      waitUntil(work.then((r) => console.log(JSON.stringify({ cron: true, markets: r }, (k, v) => (typeof v === 'bigint' ? v.toString() : v)))));
+      return json(res, 202, { accepted: true, cron: true, markets: list.map((m) => m.symbol) });
+    }
     const results = await work;
     // backward compatibility: the first market's fields at the top level
     const first = results.find((r) => r.symbol === markets[0].symbol) || results[0] || {};

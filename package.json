@@ -10,6 +10,7 @@
   "license": "MIT",
   "dependencies": {
     "@solana/web3.js": "^1.99.0",
+    "@vercel/functions": "^3.9.9",
     "velque-sdk": "github:usevelque/velque-sdk"
   },
   "devDependencies": {
