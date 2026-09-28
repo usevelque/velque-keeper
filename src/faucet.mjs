@@ -10,6 +10,9 @@ const BASE_DROP = 100n;
 const QUOTE_DROP = 50_000n * U;
 const SOL_DROP = 40_000_000; // 0.04 SOL
 const SOL_FLOOR = 10_000_000;
+// SOL is given out only from the surplus: the same key pays rent for the market
+// books, and the faucet must not drain it
+const SOL_RESERVE = 250_000_000;
 
 const ata = (owner, mint, prog) => PublicKey.findProgramAddressSync([owner.toBuffer(), prog.toBuffer(), mint.toBuffer()], ATA)[0];
 const createAtaIx = (payer, owner, mint, prog) => new TransactionInstruction({
@@ -56,7 +59,7 @@ export default async function handler(req, res) {
     }
     tx.add(createAtaIx(me.publicKey, wallet, quoteMint, quoteProg), mintToIx(quoteMint, quoteProg, qAta, me.publicKey, QUOTE_DROP));
     let sol = 0;
-    if ((await conn.getBalance(wallet)) < SOL_FLOOR) {
+    if ((await conn.getBalance(wallet)) < SOL_FLOOR && (await conn.getBalance(me.publicKey)) > SOL_RESERVE) {
       tx.add(SystemProgram.transfer({ fromPubkey: me.publicKey, toPubkey: wallet, lamports: SOL_DROP }));
       sol = SOL_DROP / 1e9;
     }
