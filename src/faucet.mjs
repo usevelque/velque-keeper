@@ -8,7 +8,7 @@ const ATA = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
 const U = 1_000_000n;
 const BASE_DROP = 100n;
 const QUOTE_DROP = 50_000n * U;
-const SOL_DROP = 40_000_000; // 0.04 SOL
+const SOL_DROP = 20_000_000; // 0.02 SOL
 const SOL_FLOOR = 10_000_000;
 // SOL is given out only from the surplus: the same key pays rent for the market
 // books, and the faucet must not drain it
