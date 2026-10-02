@@ -76,4 +76,5 @@ export default {
       "checkMint": "XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp"
     }
   ],
+  "marketMaker": "38723mSCpCgWg2VLbguHzzfqifBdXHMMBtjZGRWYux7q"
 };
