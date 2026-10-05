@@ -52,3 +52,24 @@ On the test market a market maker quotes both sides so there is always something
 
 Its orders are labelled in the app.
 
+## Running it
+
+```bash
+npm install
+npm run build        # bundles src/ into api/ with esbuild
+vercel deploy --prod
+```
+
+Environment:
+
+| Variable | Purpose |
+| --- | --- |
+| `VELQUE_KEY` | Oracle key (JSON array). Posts the reference, pays rent for new window books, runs the faucet |
+| `VELQUE_MM_KEY` | Market maker key (test market only) |
+| `VELQUE_RPC` | RPC endpoint. A keyed endpoint is strongly recommended: public ones rate-limit |
+| `CRON_SECRET` | Only calls carrying `?key=<secret>` move the market maker |
+
+Schedule `GET /api/crank?key=<CRON_SECRET>` once a minute. Called with the secret, the function answers `202` immediately and finishes the work in the background, so a scheduler with a short timeout does not see failures.
+
+Markets are listed in [`config.mjs`](config.mjs).
+
