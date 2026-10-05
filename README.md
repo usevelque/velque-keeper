@@ -31,3 +31,24 @@ For every market, in order:
 
 Calls are idempotent. Two cranks racing each other is expected and handled.
 
+## Reference price
+
+`velque-sdk/reference` does the work:
+
+- last trade from api.nasdaq.com and from Yahoo Finance, each less than three minutes old;
+- the two have to agree within 0.5%, and the average is used;
+- if only one answers, it is used only when the token price on Jupiter is within 3% of it;
+- otherwise nothing is posted.
+
+The share price is multiplied by the Token-2022 `ScaledUiAmount` multiplier read from the mint, because xStocks pay dividends by raising that multiplier instead of changing balances.
+
+## The test-market maker
+
+On the test market a market maker quotes both sides so there is always something to trade against. It is deliberately simple:
+
+- **Day:** two levels per side at 0.2% and 0.6% from the reference. A quote is cancelled and replaced when the reference moves more than 0.1% away from it.
+- **Dark:** one until-cancelled bid and one ask at 1% from the last reference. They carry from window to window by themselves and reach the Day book through the opening cross.
+- It never trades with itself (the program skips an owner's own orders) and it does not generate volume. A trade happens only when someone else hits a quote.
+
+Its orders are labelled in the app.
+
