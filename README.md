@@ -73,3 +73,17 @@ Schedule `GET /api/crank?key=<CRON_SECRET>` once a minute. Called with the secre
 
 Markets are listed in [`config.mjs`](config.mjs).
 
+## Operational notes
+
+- The oracle key pays rent (about 0.027 SOL) for each new window book and gets it back when the book is closed. If it runs out of SOL, windows stop clearing. The crank logs `ORACLE LOW ON SOL` below 0.06 SOL.
+- The faucet gives SOL only while the oracle key holds a reserve, so the faucet cannot drain the key that keeps the market running.
+- The oracle key cannot move user funds and cannot upgrade the program.
+
+## Related
+
+- [velque-program](https://github.com/usevelque/velque-program)
+- [velque-sdk](https://github.com/usevelque/velque-sdk)
+
+## License
+
+MIT
