@@ -1,5 +1,8 @@
 # velque-keeper
 
+[![solana](https://img.shields.io/badge/solana-devnet-f58aae?style=flat-square&labelColor=2a1228)](https://usevelque.xyz/docs)
+[![license](https://img.shields.io/badge/license-MIT-f58aae?style=flat-square&labelColor=2a1228)](LICENSE)
+
 The off-chain service that keeps a [Velque](https://usevelque.xyz) market in step with Nasdaq. It runs as three serverless functions.
 
 | Endpoint | What it does |
@@ -9,6 +12,13 @@ The off-chain service that keeps a [Velque](https://usevelque.xyz) market in ste
 | market maker (inside the crank) | Test market only: keeps two-sided quotes so the book is never empty |
 
 Everything the crank does on chain can be done by anyone. `clear`, `close_day` and `close_book` are permissionless instructions. The only privileged action is posting the reference price, which needs the market's oracle key.
+
+<a href="https://usevelque.xyz/app">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/usevelque/usevelque/output/board-dark.svg">
+    <img src="https://raw.githubusercontent.com/usevelque/usevelque/output/board-light.svg" alt="The Velque test market right now, read from Solana devnet" width="100%">
+  </picture>
+</a>
 
 ## What one crank call does
 
